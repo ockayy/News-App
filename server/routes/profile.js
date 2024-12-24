@@ -11,18 +11,23 @@ const validatePassword = require('../middleware/validatePassword');
 const storage = multer.diskStorage({
     destination: './uploads/profiles/',
     filename: function(req, file, cb) {
-        cb(null, 'PROFILE-' + Date.now() + path.extname(file.originalname));
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      cb(null, 'profile-' + uniqueSuffix + path.extname(file.originalname));
     }
-});
+  });
 
 // Initialize upload
-const upload = multer({
+const upload = multer({ 
     storage: storage,
-    limits: { fileSize: 1000000 }, // 1MB limit
-    fileFilter: function(req, file, cb) {
-        checkFileType(file, cb);
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+    fileFilter: (req, file, cb) => {
+      if (file.mimetype.startsWith('image/')) {
+        cb(null, true);
+      } else {
+        cb(new Error('Not an image file'));
+      }
     }
-}).single('profile_pic');
+  }).single('profile_pic');
 
 // Check File Type
 function checkFileType(file, cb) {
@@ -56,7 +61,15 @@ router.get('/profile', authenticateToken, async (req, res) => {
 });
 
 // Update profile
-router.put('/profile', authenticateToken, upload, async (req, res) => {
+router.put('/profile', authenticateToken, (req, res, next) => {
+    upload(req, res, function(err) {
+        if (err) {
+            console.error('Multer error:', err);
+            return res.status(400).json({ error: err.message });
+        }
+        next();
+    });
+}, async (req, res) => {
     try {
         const { name, description, location } = req.body;
         const userId = req.user.user_id;
